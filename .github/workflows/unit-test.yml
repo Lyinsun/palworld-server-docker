@@ -474,6 +474,28 @@ jobs:
               sleep 5
             done
 
+      - name: Verify ARM64 installer uses DepotDownloader
+        run: |
+          installer_value="$(
+            docker inspect \
+              --format '{{range .Config.Env}}{{println .}}{{end}}' \
+              palworld-server-${{ github.run_id }} |
+              sed -n 's/^USE_DEPOT_DOWNLOADER=//p'
+          )"
+          if [ "${installer_value}" != "true" ]; then
+            echo "Expected USE_DEPOT_DOWNLOADER=true, got '${installer_value}'."
+            exit 1
+          fi
+
+          if ! installer_log="$(
+            docker logs palworld-server-${{ github.run_id }} 2>&1 |
+              grep -F "Downloading server files with DepotDownloader"
+          )"; then
+            echo "Expected DepotDownloader installation log was not found."
+            exit 1
+          fi
+          printf '%s\n' "${installer_log}"
+
       - name: Test negative delta recovery process argument
         run: |
           docker exec palworld-server-${{ github.run_id }} bash -c '
