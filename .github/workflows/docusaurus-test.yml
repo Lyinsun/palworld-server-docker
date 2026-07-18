@@ -5,9 +5,12 @@ on:  # yamllint disable-line rule:truthy
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - clockguard-experiment
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   deploy:

@@ -2,6 +2,14 @@
 # shellcheck source=scripts/helper_functions.sh
 source "/home/steam/server/helper_functions.sh"
 
+# shellcheck source=scripts/negative_delta_recovery.sh
+source "/home/steam/server/negative_delta_recovery.sh"
+
+if ! ValidateNegativeDeltaRecoverySetting; then
+    LogError "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false."
+    exit 1
+fi
+
 # Helper Functions for installation & updates
 # shellcheck source=scripts/helper_install.sh
 source "/home/steam/server/helper_install.sh"
@@ -42,7 +50,7 @@ if [ "$architecture" == "arm64" ]; then
     # create an arm64 version of ./PalServer.sh
 
     cp ./PalServer.sh ./PalServer-arm64.sh
-    
+
     sed -i "s|\(\"\$UE_PROJECT_ROOT\/Pal\/Binaries\/Linux\/PalServer-Linux-Shipping\" Pal \"\$@\"\)|LD_LIBRARY_PATH=/home/steam/steamcmd/linux64:\$LD_LIBRARY_PATH /usr/local/bin/box64 \1|" ./PalServer-arm64.sh
     chmod +x ./PalServer-arm64.sh
     STARTCOMMAND=("./PalServer-arm64.sh")
@@ -71,6 +79,8 @@ fi
 if [ "${ENABLE_PERF_THREADING_ARGS,,}" = true ]; then
     STARTCOMMAND+=("-useperfthreads" "-NoAsyncLoadingThread" "-UseMultithreadForDS")
 fi
+
+AppendNegativeDeltaRecoveryArgument
 
 if [ -n "${WORKER_THREADS_SERVER}" ]; then
     STARTCOMMAND+=("-NumberOfWorkerThreadsServer=${WORKER_THREADS_SERVER}")

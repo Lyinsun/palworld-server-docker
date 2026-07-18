@@ -2,6 +2,9 @@
 name: Unit-test
 on:  # yamllint disable-line rule:truthy
   pull_request:
+  push:
+    branches:
+      - clockguard-experiment
   workflow_call:
 
 concurrency:
@@ -26,6 +29,29 @@ jobs:
           load: true
           tags: ${{ github.run_id }}
           platforms: linux/amd64
+
+      - name: Reject invalid negative delta recovery setting
+        run: |
+            set +e
+            output="$(timeout --signal=TERM --kill-after=5s 30s docker run --rm \
+              --name palworld-server-invalid-${{ github.run_id }} \
+              --env-file .env.example \
+              -e PALWORLD_ALLOW_NEGATIVE_DELTA_TIME=invalid \
+              ${{ github.run_id }} 2>&1)"
+            status=$?
+            set -e
+            docker rm -f palworld-server-invalid-${{ github.run_id }} >/dev/null 2>&1 || true
+
+            if [ "${status}" -ne 1 ]; then
+              echo "Expected exit code 1 for invalid setting, got ${status}."
+              exit 1
+            fi
+            if ! grep -Fq \
+              "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false." \
+              <<< "${output}"; then
+              echo "Expected invalid-setting error was not logged."
+              exit 1
+            fi
 
       - name: Run server
         run: |
@@ -59,6 +85,25 @@ jobs:
               echo "Waiting for server to start..."
               sleep 5
             done
+
+      - name: Test negative delta recovery is disabled by default
+        run: |
+          docker exec palworld-server bash -c '
+            pal_pid="$(pidof PalServer-Linux-Shipping)"
+            pal_pid="${pal_pid%% *}"
+            if [ -z "${pal_pid}" ]; then
+              echo "PalServer process is missing."
+              exit 1
+            fi
+
+            mapfile -d "" -t arguments < "/proc/${pal_pid}/cmdline"
+            for argument in "${arguments[@]}"; do
+              if [ "${argument}" = "-ini:Engine:[ConsoleVariables]:Pal.AllowNegativeDeltaTime=1" ]; then
+                echo "Negative delta recovery was unexpectedly enabled."
+                exit 1
+              fi
+            done
+          '
 
       # - name: Test if rcon.yaml is valid
       #   run: |
@@ -301,7 +346,7 @@ jobs:
 
   unit-test-arm64:
     name: Docker - Test (arm64)
-    runs-on: [self-hosted, ARM64]
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -322,6 +367,30 @@ jobs:
           tags: ${{ github.run_id }}:arm64
           platforms: linux/arm64
 
+      - name: Reject invalid negative delta recovery setting
+        run: |
+            set +e
+            output="$(timeout --signal=TERM --kill-after=5s 30s docker run --rm \
+              --name palworld-server-invalid-${{ github.run_id }} \
+              --platform linux/arm64 \
+              --env-file .env.example \
+              -e PALWORLD_ALLOW_NEGATIVE_DELTA_TIME=invalid \
+              ${{ github.run_id }}:arm64 2>&1)"
+            status=$?
+            set -e
+            docker rm -f palworld-server-invalid-${{ github.run_id }} >/dev/null 2>&1 || true
+
+            if [ "${status}" -ne 1 ]; then
+              echo "Expected exit code 1 for invalid setting, got ${status}."
+              exit 1
+            fi
+            if ! grep -Fq \
+              "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false." \
+              <<< "${output}"; then
+              echo "Expected invalid-setting error was not logged."
+              exit 1
+            fi
+
       - name: Run server
         run: |
             sed -i 's/^USE_DEPOT_DOWNLOADER=False/USE_DEPOT_DOWNLOADER=True/' .env.example && \
@@ -333,6 +402,7 @@ jobs:
             -p 25575:25575/tcp \
             -v ./palworld-${{ github.run_id }}:/palworld/ \
             --env-file .env.example \
+            -e PALWORLD_ALLOW_NEGATIVE_DELTA_TIME=true \
             --restart unless-stopped \
             --stop-timeout 30 \
             ${{ github.run_id }}:arm64
@@ -356,6 +426,30 @@ jobs:
               echo "Waiting for server to start..."
               sleep 5
             done
+
+      - name: Test negative delta recovery process argument
+        run: |
+          docker exec palworld-server-${{ github.run_id }} bash -c '
+            pal_pid="$(pidof PalServer-Linux-Shipping)"
+            pal_pid="${pal_pid%% *}"
+            if [ -z "${pal_pid}" ]; then
+              echo "PalServer process is missing."
+              exit 1
+            fi
+
+            mapfile -d "" -t arguments < "/proc/${pal_pid}/cmdline"
+            count=0
+            for argument in "${arguments[@]}"; do
+              if [ "${argument}" = "-ini:Engine:[ConsoleVariables]:Pal.AllowNegativeDeltaTime=1" ]; then
+                count=$((count + 1))
+              fi
+            done
+
+            if [ "${count}" -ne 1 ]; then
+              echo "Expected exactly one negative delta recovery process argument."
+              exit 1
+            fi
+          '
       # RCON is deprecated, so skipping this test for now
       # - name: Test if rcon.yaml is valid
       #   run: |

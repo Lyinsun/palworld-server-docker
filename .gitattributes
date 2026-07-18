@@ -1,2 +1,5 @@
 # Ensure the scripts use LF line endings, not CRLF
 *.sh text eol=lf
+
+# The example env file is intentionally stored with CRLF line endings.
+.env.example -text whitespace=cr-at-eol

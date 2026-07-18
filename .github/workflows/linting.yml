@@ -5,8 +5,9 @@ on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - main
+      - clockguard-experiment
 
-run-name: Pull request - ${{ github.event.pull_request.number }}
+run-name: ${{ github.event_name == 'pull_request' && format('Pull request - {0}', github.event.pull_request.number) || format('Push - {0}', github.ref_name) }}
 jobs:
   shellcheck:
     name: Lint - Shell
@@ -17,6 +18,9 @@ jobs:
 
       - name: Shellcheck
         uses: ludeeus/action-shellcheck@2.0.0
+
+      - name: Test negative delta recovery argument
+        run: ./tests/test-negative-delta-recovery.sh
 
   dockerlint:
     name: Lint - Docker
