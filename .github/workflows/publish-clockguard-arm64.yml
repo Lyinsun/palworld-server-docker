@@ -1,0 +1,69 @@
+---
+name: Publish clock rollback ARM64 image
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - publish-clockguard-640a425
+    paths:
+      - .github/workflows/publish-clockguard-arm64.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-clockguard-640a425
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'Lyinsun/palworld-server-docker' &&
+      github.actor == 'Lyinsun' &&
+      github.ref == 'refs/heads/publish-clockguard-640a425'
+    runs-on: ubuntu-24.04-arm
+    env:
+      SOURCE_SHA: 640a42537f4641e6b45f5083826667c5e892dca7
+      IMAGE_TAG: >-
+        ghcr.io/lyinsun/palworld-server-docker:clock-rollback-640a425-r${{ github.run_id }}-a${{ github.run_attempt }}-arm64
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4
+
+      - name: Build and publish exact source commit
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+        with:
+          context: https://github.com/Lyinsun/palworld-server-docker.git#640a42537f4641e6b45f5083826667c5e892dca7
+          file: ./Dockerfile
+          platforms: linux/arm64
+          pull: true
+          no-cache: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ env.IMAGE_TAG }}
+          build-args: |
+            GIT_VERSION_TAG=${{ env.SOURCE_SHA }}
+          labels: |
+            org.opencontainers.image.title=Palworld Server Docker clock rollback fork
+            org.opencontainers.image.source=https://github.com/Lyinsun/palworld-server-docker
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
+            org.opencontainers.image.version=clock-rollback-640a425
+
+      - name: Record immutable image identity
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          test -n "${IMAGE_DIGEST}"
+          printf '### Published image\n\n- Tag: `%s`\n- Digest: `%s`\n' \
+            "${IMAGE_TAG}" "${IMAGE_DIGEST}" >> "${GITHUB_STEP_SUMMARY}"
