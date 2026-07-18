@@ -49,9 +49,22 @@ assert_invalid_rejected() {
     [ "${#STARTCOMMAND[@]}" -eq 1 ] || fail "invalid value changed the command"
 }
 
+assert_empty_rejected() {
+    PALWORLD_ALLOW_NEGATIVE_DELTA_TIME=
+    if ValidateNegativeDeltaRecoverySetting; then
+        fail "empty value passed validation"
+    fi
+    STARTCOMMAND=("./PalServer.sh")
+    if AppendNegativeDeltaRecoveryArgument; then
+        fail "empty value was accepted"
+    fi
+    [ "${#STARTCOMMAND[@]}" -eq 1 ] || fail "empty value changed the command"
+}
+
 assert_default_off
 assert_explicit_off
 assert_enabled
 assert_invalid_rejected
+assert_empty_rejected
 
 echo "negative delta recovery argument tests passed"

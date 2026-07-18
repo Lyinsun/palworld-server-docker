@@ -53,6 +53,29 @@ jobs:
               exit 1
             fi
 
+      - name: Reject empty negative delta recovery setting
+        run: |
+            set +e
+            output="$(timeout --signal=TERM --kill-after=5s 30s docker run --rm \
+              --name palworld-server-empty-${{ github.run_id }} \
+              --env-file .env.example \
+              -e PALWORLD_ALLOW_NEGATIVE_DELTA_TIME= \
+              ${{ github.run_id }} 2>&1)"
+            status=$?
+            set -e
+            docker rm -f palworld-server-empty-${{ github.run_id }} >/dev/null 2>&1 || true
+
+            if [ "${status}" -ne 1 ]; then
+              echo "Expected exit code 1 for empty setting, got ${status}."
+              exit 1
+            fi
+            if ! grep -Fq \
+              "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false." \
+              <<< "${output}"; then
+              echo "Expected empty-setting error was not logged."
+              exit 1
+            fi
+
       - name: Run server
         run: |
             docker run -d \
@@ -388,6 +411,30 @@ jobs:
               "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false." \
               <<< "${output}"; then
               echo "Expected invalid-setting error was not logged."
+              exit 1
+            fi
+
+      - name: Reject empty negative delta recovery setting
+        run: |
+            set +e
+            output="$(timeout --signal=TERM --kill-after=5s 30s docker run --rm \
+              --name palworld-server-empty-${{ github.run_id }} \
+              --platform linux/arm64 \
+              --env-file .env.example \
+              -e PALWORLD_ALLOW_NEGATIVE_DELTA_TIME= \
+              ${{ github.run_id }}:arm64 2>&1)"
+            status=$?
+            set -e
+            docker rm -f palworld-server-empty-${{ github.run_id }} >/dev/null 2>&1 || true
+
+            if [ "${status}" -ne 1 ]; then
+              echo "Expected exit code 1 for empty setting, got ${status}."
+              exit 1
+            fi
+            if ! grep -Fq \
+              "PALWORLD_ALLOW_NEGATIVE_DELTA_TIME must be true or false." \
+              <<< "${output}"; then
+              echo "Expected empty-setting error was not logged."
               exit 1
             fi
 
